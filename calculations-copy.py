@@ -21,6 +21,8 @@ What it does
         (formulas reproduced below in code comments)
       • writes a processed copy next to the source file
         ( …_processed.xlsx ).
+        
+3.  map and write the results in a summary workbook "Formulas Distances_rev1.xlsx" in the specified path.
 
 The script is purely local-IO; nothing is sent anywhere.
 """
