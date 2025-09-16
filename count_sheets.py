@@ -1,6 +1,8 @@
+#this script was used for debugging the calculation script, you can use it for counting sheets in any workbooks
+#just provide the path below and it prints in the terminal
 import pandas as pd
 
-xl = pd.ExcelFile(r"C:\Users\bimax\DC\ACCDocs\Axpo Grid AG\DEMO_AXPO_Leitungen\Project Files\Grid 4.0 - PLS Distances Development\PLS_CADD_tests_Elham\Cond_10C_TR1730a002_003_processed.xlsx")
+xl = pd.ExcelFile(r"path to the xlsx workbook you want to counts its sheets")
 sheet_count = len(xl.sheet_names)
 
 print(f"Number of sheets: {sheet_count}")
