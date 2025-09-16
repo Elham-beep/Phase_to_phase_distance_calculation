@@ -31,17 +31,17 @@ import argparse
 import glob
 import os
 import re
-from typing import Tuple, Dict, Set
+from typing import Tuple, Set
 import numpy as np
 
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
-from openpyxl import Workbook
 
-# ----------------------------------------------------------------------
-# helpers
-# ----------------------------------------------------------------------
+
+# ---------------------------------------------------------------
+# CONSTANTS
+# ---------------------------------------------------------------
 FILE_RE = re.compile(r"Cond_10C_(TR\d{4}a\d{3})_(\d{3})\.xlsx$", re.I)
 SHEET_RE = re.compile(r"(\d+)-(\d+)_(\d+)-(\d+)$")
 # Hard-coded location for the summary workbook
@@ -50,9 +50,30 @@ RESULTS_PATH = os.path.join(os.path.dirname(__file__),r"C:\Users\bimax\DC\ACCDoc
 # Circuit membership tables (expand if your network changes)
 CIRCUIT_1: Set[int] = {41, 42, 43}
 CIRCUIT_2: Set[int] = {44, 45, 46}
-
-
 EARTH_WIRE = 0          # symbolic circuit ID for EW towers
+
+#sheet names 
+PH_PH_SHEET = "Result_Dist_Ph-Ph (10ºC)"
+PH_EW_SHEET = "Result_Dist_Ph-EW"
+
+# column maps – 1-based indices in the template workbooks
+COL_PH_PH = {
+    "row":        1,  "src_start": 2,  "src_end":   3,  "src_set":   4,
+    "src_phase":  5,  "tgt_start": 6,  "tgt_end":   7,  "tgt_set":   8,
+    "tgt_phase":  9,  "station":  10,  "sag":      11,  "lk":       12,
+    "weather":   13,  "beta":     14,  "w":        15,  "k":        16,
+    "c1":        17,  "c2":       18,  "req":      19,  "cur":      20,
+    "ok":        21,
+}
+
+COL_PH_EW = {
+    "row":        1,  "src_start": 2,  "src_end":   3,  "src_set":   4,
+    "src_phase":  5,  "tgt_start": 6,  "tgt_end":   7,  "tgt_set":   8,
+    "tgt_phase":  9,  "station":  10,  "wind":     11,  # left blank
+    "c1":        12,  "c3":       13,  "req":      14,  "cur":      15,
+    "ok":        16,
+}
+
 
 # ------------------------------------------------------------------
 # helper: locate a distance / sag column no matter how it was named
@@ -78,29 +99,11 @@ def _pick_distance_col(df: pd.DataFrame, a: int, b: int) -> str:
 
 RESULT_SHEET_NAMES = [
     "Result_Dist_Ph-Ph (10ºC)",
-    # "Result_Dist_Ph-Ph(Wind)",
-    # "Result_Dist_G-G (10ºC)",
+
 ]
 
-def _open_or_create_results(path: str):
-    """
-    Return (workbook, sheet_dict) where sheet_dict maps the 3 fixed
-    sheet names to openpyxl Worksheet objects, guaranteeing they exist.
-    """
-    if os.path.exists(path):
-        wb = load_workbook(path)
-    else:
-        wb = Workbook()
-        # remove the default sheet that openpyxl creates
-        del wb[wb.sheetnames[0]]
 
-    for s in RESULT_SHEET_NAMES:
-        if s not in wb.sheetnames:
-            wb.create_sheet(s)
 
-    return wb, {name: wb[name] for name in RESULT_SHEET_NAMES}
- 
- 
  
 def _which_circuit(tower: int) -> int:
     """
@@ -129,7 +132,8 @@ def _parse_sheet_name(sheet_name: str) -> Tuple[int, int, int, int]:
 
 def _load_metadata(xl_path: str) -> Tuple[str, str]:
     """
-    Extract start & end span codes from the workbook filename.
+    Extract start & end span codes from the workbook filename since in this case we only have the span names
+    on the workbook name.
     Returns (start_span, end_span_suffix).
     """
     m = FILE_RE.search(os.path.basename(xl_path))
@@ -152,12 +156,12 @@ def process_sheet(df: pd.DataFrame,
     df["sag"] = df[[col_sd12, col_sd34]].max(axis=1)
 
     # ------------------------------------------------------------------
-    # 2-4  K  =  -(0.1/90)*Beta + 0.75
+    # 2-4  K  =  -(0.1/90)*Beta + 0.75  ->change this linear equation if needed
     # ------------------------------------------------------------------
     df["K"] = -(0.1 / 90.0) * df["Beta Angle (°)"] + 0.75
 
     # ------------------------------------------------------------------
-    # 2-5  constant LK
+    # 2-5  constant LK -> length of insulators, here is just an arbitrary number for the sake of calculations
     # ------------------------------------------------------------------
     df["LK"] = 2.0  # metres
 
@@ -183,7 +187,7 @@ def process_sheet(df: pd.DataFrame,
             df["C1"] = 0.0
             df["C2"] = 2.29
             
-        # Make sure every column you use in the formula is numeric
+        # Make sure every column you use in the formula is numeric just for the sake of calculations
         cols_to_float = ["K", "sag", "LK", "C1", "C2"]
         df[cols_to_float] = df[cols_to_float].apply(
             pd.to_numeric, errors="coerce"
@@ -233,38 +237,8 @@ def process_sheet(df: pd.DataFrame,
 
     return df, summary
 
-# ---------------------------------------------------------------------
-# hard-coded results file (define once near the imports)
-# ---------------------------------------------------------------
-# CONSTANTS (keep near imports – already present for Ph-Ph sheet)
-# ---------------------------------------------------------------
-RESULTS_PATH = os.path.join(os.path.dirname(__file__), r"C:\Users\bimax\DC\ACCDocs\Axpo Grid AG\DEMO_AXPO_Leitungen\Project Files\Grid 4.0 - PLS Distances Development\elham-outputs\Formulas Distances_rev1.xlsx")
-
-PH_PH_SHEET = "Result_Dist_Ph-Ph (10ºC)"
-PH_EW_SHEET = "Result_Dist_Ph-EW"
-
-# column maps – 1-based indices in the template workbooks
-COL_PH_PH = {
-    "row":        1,  "src_start": 2,  "src_end":   3,  "src_set":   4,
-    "src_phase":  5,  "tgt_start": 6,  "tgt_end":   7,  "tgt_set":   8,
-    "tgt_phase":  9,  "station":  10,  "sag":      11,  "lk":       12,
-    "weather":   13,  "beta":     14,  "w":        15,  "k":        16,
-    "c1":        17,  "c2":       18,  "req":      19,  "cur":      20,
-    "ok":        21,
-}
-
-COL_PH_EW = {
-    "row":        1,  "src_start": 2,  "src_end":   3,  "src_set":   4,
-    "src_phase":  5,  "tgt_start": 6,  "tgt_end":   7,  "tgt_set":   8,
-    "tgt_phase":  9,  "station":  10,  "wind":     11,  # left blank
-    "c1":        12,  "c3":       13,  "req":      14,  "cur":      15,
-    "ok":        16,
-}
 
 
-# ---------------------------------------------------------------
-# MAIN WORKBOOK PROCESSOR
-# ---------------------------------------------------------------
 # ------------------------------------------------------------------
 # helper: open existing results workbook and verify tabs
 # ------------------------------------------------------------------
@@ -412,7 +386,6 @@ def process_workbook(xl_path: str) -> None:
 
 
 # ----------------------------------------------------------------------
-# CLI
 # ----------------------------------------------------------------------
 def main() -> None:
     ap = argparse.ArgumentParser(
